@@ -1,0 +1,472 @@
+#+title: ef-ext.el
+#+author: Enrico Flor
+#+description: Some useful small extensions to Emacs
+#+startup: noindent
+
+#+begin_src emacs-lisp :tangle yes
+;;; ef-ext.el --- Miscellanea of simple extensions -*- lexical-binding: t; -*-
+
+;; Copyright (C) 2022 Enrico Flor
+
+;; Author: Enrico Flor <enrico@eflor.net>
+;; Maintainer: Enrico Flor <enrico@eflor.net>
+;; URL: https://github.com/enricoflor/ef-ext
+;; Version: 0.1.0
+;; Package-Requires: ((emacs "26.1"))
+
+;; SPDX-License-Identifier: GPL-3.0-or-later
+
+;; This file is NOT part of GNU Emacs.
+
+;; This program is free software; you can redistribute it and/or
+;; modify it under the terms of the GNU General Public License as
+;; published by the Free Software Foundation, either version 3 of the
+;; License, or (at your option) any later version.  This program is
+;; distributed in the hope that it will be useful, but WITHOUT ANY
+;; WARRANTY; without even the implied warranty of MERCHANTABILITY or
+;; FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
+;; License for more details.  You should have received a copy of the
+;; GNU General Public License along with this program.  If not, see
+;; <https://www.gnu.org/licenses/>.
+
+;;; Commentary:
+
+;; ef-ext.el is not a package for Emacs and won't become one.  It is
+;; just a small (maybe growing) collection of small adjustments I made
+;; to existing functionalities (either built in or provided by third
+;; party packages).  It is essentially a subset of my personal
+;; init.el.
+
+;;; Code:
+
+(require 'cl-lib)
+
+(eval-when-compile
+  (require 'subr-x))
+#+end_src
+
+** Content                                                              :toc:
+
+  - [[#commenting][Commenting]]
+  - [[#unfilling][Unfilling]]
+  - [[#window-navigation][Window navigation]]
+  - [[#pdf-navigation][PDF navigation]]
+  - [[#latex-related-stuff][LaTeX related stuff]]
+
+** Commenting
+
+The default behavior of ~comment-dwim~ has a tiny wrinkle.  When the
+region is not active and point is on a non commented portion of text,
+~comment-dwim~ adds an inline comment.  I don't do inline comments very
+often.  So I prefer to have this behavior only if point is already at
+the end of the line.  If point is anywhere else (and the region is not
+active), I want to comment or uncomment the line I am currently on.
+
+#+begin_src emacs-lisp :tangle yes
+(defun ef-ext-comment-line-or-dwim-up (arg)
+  "Comment or uncomment line if point is not at end of line.
+If point is at the end of line or region is active, evaluate
+'comment-dwim' with arguments ARG."
+  (interactive "*P")
+  (if (or (eolp) (use-region-p))
+      (comment-dwim arg)
+    (comment-or-uncomment-region (line-beginning-position)
+				 (line-end-position))))
+
+;; This will overwrite the default keybinding of comment-dwim
+(global-set-key (kbd "M-;") #'ef-ext-comment-line-or-dwim)
+#+end_src
+
+** Unfilling
+
+I never use ~visual-line-mode~ and my lines are short as a result (72 or
+80 depending on the mode).  When I need to yank text from Emacs to
+outside of Emacs I often need to unfill the text to have a nice
+display of the text.  By advising the pertinent commands, I achieve
+that by passing the universal argument ~kill-ring-save~ and ~kill-region~
+(thus, with ~C-u M-w~ and ~C-u C-w~).  The dependency on [[the ][unfill]] only saves
+few lines of code in the function, but the package is very small and
+independently useful anyways.
+
+#+begin_src emacs-lisp :tangle yes
+(require 'unfill)
+
+(defun ef-ext-unfill-newest-entry-in-kill-ring (origf &rest args)
+  "Call ORIGF with ARGS.
+If called with a prefix argument, unfill newest entry in the
+'kill-ring'.  This is meant to be an advice around
+'kill-ring-save' and 'kill-region' (which would then be ORIGF)."
+  (interactive (list (mark) (point) 'region) p)
+  (apply origf args)
+  (when current-prefix-arg
+    (kill-new
+     (with-temp-buffer
+       (insert (car kill-ring))
+       (unfill-region (point-min) (point-max))
+       (buffer-string)))))
+
+(advice-add 'kill-ring-save
+            :around #'ef-ext-unfill-newest-entry-in-kill-ring)
+(advice-add 'kill-region
+            :around #'ef-ext-unfill-newest-entry-in-kill-ring)
+#+end_src
+
+** Window navigation
+
+I mostly move through windows with the ~other-window~ command, which I
+rebound to ~M-o~.  But sometimes I just want the buffer I am visiting to
+be in a different window in the current configuration.  But at the
+same time, I want to keep seeing all the buffers I am currently seeing
+in the frame.  To avoid reasoning about geometry (move this to the
+left, swap this to the right), or moving to different windows and
+switching buffer multiple times, I have to functions that take care of
+stuff for me.
+
+*** Shift current window
+
+This is the one I use most often, and I bind ~M-p~ to it (my ~M-o~ is
+bound to ~other-window~).  Suppose the selected buffer is /b1/ in window
+/w1/.  By calling ~ef-ext-shift-window~, /b1/ will be displayed in the next
+window (say /w2/) and the buffer /b2/ that was displayed in /w2/ will
+instead be displayed in /w1/.  The geometry of the windows is preserved,
+and the selected buffer is still /b1/, but in window /w2/.  If I call
+~ef-ext-shift-window~ again (without calling any other command in
+between), /b2/ will be back in /w2/ and this time /b1/ will be displayed in
+/w3/ (the second next window from /w1/), and of course /b3/, which was
+displayed in /w3/, will be displayed in /w1/.  In other words, this
+command moves the current buffer to another window (you'd often want
+it moved to a larger one) but preserving the windows configuration as
+much as possible.
+
+#+CAPTION: ef-ext-shift-window in action
+#+NAME:   fig:ef-ext-shift-window
+[[./images/shift_01.gif]]
+
+
+#+begin_src emacs-lisp :tangle yes
+(defvar-local ef-ext-last-shifted-buffer nil)
+
+(defun ef-ext-shift-window ()
+  "Move current buffer in the frame.
+
+First swap current window with next window.  Upon repeating the
+command, put what was next window back in place, and swap current
+window with the another window, and so on."
+  (interactive)
+  (unless (eq last-command 'ef-ext-shift-window)
+    (setq ef-ext-last-shifted-buffer nil))
+  (let ((target (window-buffer (next-window))))
+    (when (and (eq last-command 'ef-ext-shift-window)
+	       (not (eq target ef-ext-last-shifted-buffer)))
+      (window-swap-states (selected-window)
+			  (get-buffer-window ef-ext-last-shifted-buffer nil)))
+    (window-swap-states (selected-window) (get-buffer-window target))
+    (setq ef-ext-last-shifted-buffer target)))
+
+(global-set-key (kbd "M-p") #'ef-ext-shift-window)
+#+end_src
+
+*** Cycle all the windows
+
+This command simply cycles the windows in the current frame: for each
+buffer /b/ displayed in window /w/, ~ef-ext-cycle-window~ will return a window
+configuration where /b/ is displayed in /w'/ (/w'/ being the previous window
+with respect to /w/).  Window geometry is preserved and the selected
+buffer is unchanged.
+
+#+CAPTION: ef-ext-cycle-window in action
+#+NAME:   fig:ef-ext-cycle-window
+[[./images/cycle_01.gif]]
+
+
+#+begin_src emacs-lisp :tangle yes
+(defun ef-ext-cycle-windows ()
+  "Scramble windows in current frame.
+
+Change selected window, so that current buffer stays the same."
+  (interactive)
+  (let ((buff (current-buffer))
+	(wb-alist (cl-loop for w in (window-list)
+			   collect
+			   (cons w (window-buffer (previous-window
+						   w 0 nil))))))
+    (dolist (ass wb-alist)
+      (window--display-buffer (cdr ass) (car ass) 'reuse))
+    (select-window (get-buffer-window buff nil) t)))
+
+(global-set-key (kbd "M-P") #'ef-ext-cycle-windows)
+#+end_src
+
+** PDF navigation
+
+*** Window scrolling
+
+I use ~scroll-other-window~ and ~scroll-other-window-down~ a lot.  But I
+also use [[https://github.com/vedang/pdf-tools/][pdf-tools]], and I would like for these commands to work when
+the other window is displaying a buffer visiting a pdf.  So I advise
+the two functions in order to achieve this.
+
+#+begin_src emacs-lisp :tangle yes
+(require 'pdf-view)
+
+(defun ef-ext-scroll-down-other-window-pdf (origf &rest args)
+  "Call ORIGF with ARGS if other window is not in 'pdf-vew-mode'.
+If it is, scroll down the pdf in other window.
+
+This is meant to be an advice around
+'scroll-other-window-down' (fed as ORIGF)."
+  (interactive)
+  (when (one-window-p) (user-error "There is no other window"))
+  (let ((other-window-pdf (prog2
+			      (other-window 1)
+			      (eq major-mode 'pdf-view-mode)
+			    (other-window -1))))
+    (if (not other-window-pdf)
+	(apply origf args)
+      (other-window 1)
+      (ignore-errors (pdf-view-previous-line-or-previous-page 5))
+      (other-window -1))))
+
+(defun ef-ext-scroll-up-other-window-pdf (origf &rest args)
+  "Call ORIGF with ARGS if other window is not in 'pdf-vew-mode'.
+If it is, scroll up the pdf in other window.
+
+This is meant to be an advice around 'scroll-other-window' (fed
+as ORIGF)."
+  (interactive)
+  (when (one-window-p) (user-error "There is no other window"))
+  (let ((other-window-pdf (prog2
+			      (other-window 1)
+			      (eq major-mode 'pdf-view-mode)
+			    (other-window -1))))
+    (if (not other-window-pdf)
+	(apply origf args)
+      (other-window 1)
+      (ignore-errors (pdf-view-next-line-or-next-page 5))
+      (other-window -1))))
+
+(advice-add 'scroll-other-window-down
+	    :around #'ef-ext-scroll-down-other-window-pdf)
+(advice-add 'scroll-other-window
+	    :around #'ef-ext-scroll-up-other-window-pdf)
+#+end_src
+
+*** Synctex
+
+~TeX-view~, bound to ~C-c C-v~, lets me jump from a position in the source
+tex file to the corresponding position on the output pdf (thanks to
+Synctex).  However the default binding to perform the inverse
+operation (from the pdf to the tex file) involves using the mouse.  I
+much prefer using just the keyboard.  With the snippet below, I just
+move to the desired location on the pdf with ~isearch~ (something I
+always do anyways) and press ~C-RET~ before leaving ~isearch-mode~.  Note
+that ~C-RET~ is not bound to anything by default in ~isearch-mode-map~ so
+there really isn't any disadvantage here.
+
+#+begin_src emacs-lisp :tangle yes
+(require 'pdf-isearch)
+
+(defun ef-ext-jump-to-source ()
+  "Try to call 'pdf-isearch-sync-backward'.
+If that is successful and point is invisible, unfold the current
+environment to show it."
+  (interactive)
+  (ignore-errors (pdf-isearch-sync-backward))
+  (when (invisible-p (point)) (outline-show-entry)))
+
+(define-key isearch-mode-map (kbd "C-<return>") #'ef-ext-jump-to-source)
+#+end_src
+
+** LaTeX related stuff
+
+*** Better handling of references and labels
+
+~RefTeX~ is excellent, but there is one thing that I use rather often
+that is missing from it, namely the ability to easily change labels in
+a way that doesn't cause trouble.  Since I always use ~reftex-label~ and
+~reftex-reference~, I want to define two commands that behave exactly
+like them if point is not on a reference or on a label (i.e. if point
+is in a place where it is natural to invoke these commands), and let's
+you rename the label otherwise.
+
+First, we need a function that tells us whether point is on a
+reference or label macro or not:
+
+#+begin_src emacs-lisp :tangle yes
+(require 'reftex)
+
+(defconst ef-ext-label-ref-rg "\\\\\\(?1:[Rr]ef\\|label\\){\\(?2:[^}]*\\)}"
+  "Regexp matching label or reference items in LaTeX syntax.")
+
+(defun ef-ext-point-on-label-ref-p ()
+  "Return NIL if point is not on a LaTeX \\ref or \\label.
+Otherwise, return the label of the item at point."
+  (let ((position (point)))
+    (save-excursion
+      (beginning-of-line)
+      (catch 'found
+        (while (re-search-forward ef-ext-label-ref-rg (line-end-position) t)
+          (when (<= (match-beginning 0) position (match-end 0))
+            (throw 'found
+                   (buffer-substring-no-properties (match-beginning 2)
+                                                   (match-end 2))))
+          nil)))))
+#+end_src
+
+Then we define this macro:
+
+#+begin_src emacs-lisp :tangle yes
+(defmacro ef-ext-do-on-all-files (file-list &rest body)
+  "Execute BODY on all files in FILE-LIST.
+
+FILE-LIST is a list of strings (the absolute path of each file).
+New buffers created to visit a file previously visited by no
+buffer are killed only if they were not modified by evaluating
+BODY in them."
+  (save-excursion
+    `(dolist (f ,file-list)
+       (if (find-buffer-visiting f)
+	   (with-current-buffer (find-buffer-visiting f)
+	     ,@body)
+	 (let ((b (find-file-noselect f)))
+	   (with-current-buffer b
+	     ,@body)
+	   (unless (buffer-modified-p b)
+	     (kill-buffer b)))))))
+#+end_src
+
+Below are the two functions.  Note that since I put references between
+parentheses most of the time, ~ef-ext-reftex-reference~ will insert a
+~\ref~ macro between parentheses, unless it is passed the universal
+argument (i.e., with the keybinding defined below, with ~C-u C-c )~).
+
+#+begin_src emacs-lisp :tangle yes
+(defun ef-ext-reftex-label ()
+  "Evaluate 'reftex-label' if not on a LaTeX \\ref or \\label.
+Otherwise, prompt for new label and relabel all associated items
+in the buffer."
+  (interactive)
+  (save-excursion
+    (if (not (ef-ext-point-on-label-ref-p))
+	(reftex-label)
+      (let* ((old-label (ef-ext-point-on-label-ref-p))
+             (new-label (read-string "New label: "
+                                     old-label nil nil t)))
+	(when (string-blank-p new-label)
+	  (user-error "Labels can't be empty"))
+	(when (assoc new-label
+                     (symbol-value reftex-docstruct-symbol))
+	  (unless (yes-or-no-p
+		   (format "Label \"%s\" already used.  Continue? "
+			   new-label))
+	    (ef-ext-reftex-label)))
+	(reftex-parse-all)
+	(ef-ext-do-on-all-files
+	 (reftex-all-document-files)
+	 (widen)
+	 (goto-char (point-min))
+	 (while (re-search-forward ef-ext-label-ref-rg nil t)
+           (when (equal (match-string-no-properties 2)
+			old-label)
+             (replace-match new-label t t nil 2))))
+	(reftex-parse-all)))))
+
+(defun ef-ext-reftex-reference (&optional arg)
+  "Evaluate 'reftex-reference' if not on a LaTeX \\ref or \\label.
+Otherwise, prompt for new label and relabel all associated items
+in the buffer.  If prefix argument ARG is non-nil, do not insert
+parentheses around the reference."
+  (interactive "P")
+  (save-excursion
+    (if (not (ef-ext-point-on-label-ref-p))
+	(progn (unless current-prefix-arg
+		 (insert "()")
+		 (backward-char))
+	       (reftex-parse-one)
+	       (reftex-reference))
+      (let* ((old-label (ef-ext-point-on-label-ref-p))
+             (new-label (read-string "New label: "
+                                     old-label nil nil t)))
+	(when (string-blank-p new-label)
+	  (user-error "Labels can't be empty"))
+	(when (assoc new-label
+                     (symbol-value reftex-docstruct-symbol))
+	  (unless (yes-or-no-p
+		   (format "Label \"%s\" already used.  Continue? "
+			   new-label))
+	    (ef-ext-reftex-label)))
+	(reftex-parse-all)
+	(ef-ext-do-on-all-files
+	 (reftex-all-document-files)
+	 (widen)
+	 (goto-char (point-min))
+	 (while (re-search-forward ef-ext-label-ref-rg nil t)
+           (when (equal (match-string-no-properties 2)
+			old-label)
+             (replace-match new-label t t nil 2))))
+	(reftex-parse-all)))))
+#+end_src
+
+I overwrite the default bindings, since these two functions are drop
+in replacement for the original ones.
+
+#+begin_src emacs-lisp :tangle yes
+(define-key reftex-mode-map (kbd "C-c (") #'ef-ext-reftex-label)
+(define-key reftex-mode-map (kbd "C-c )") #'ef-ext-reftex-reference)
+#+end_src
+
+*** Housekeeping
+
+One of the things I never remember to do is to escape the space after
+the period when the period does not mark the end of a sentence.
+Typically, this should be done after abbreviations: I add these to a
+constant ~ef-ext-abbreviations-to-escape~.
+
+#+begin_src emacs-lisp :tangle yes
+(defconst ef-ext-abbreviations-to-escape '("s.t."
+					   "e.g."
+					   "i.e."
+					   "cf."
+					   "cfr."
+					   "etc."
+					   "viz."
+					   "et al."
+					   "a.o."
+					   "z.B."
+					   "bzw.")
+  "Escape space after these strings in LaTeX.")
+#+end_src
+
+A function on ~before-save-hook~ will take care of escaping these spaces
+for me (unless they are already escaped).  While I'm at it, I will let
+this function remove certain tildes (unbreakable spaces) added by
+~RefTeX~ when adding references between parentheses.  There is certainly
+a way to prevent ~RefTeX~ from doing it, but it is much easier to just
+remove these things directly.
+
+#+begin_src emacs-lisp :tangle yes
+(defun ef-ext-latex-housekeeping ()
+  "Remove unwanted tildes, escape abbreviations, fill buffer."
+  (when (eq major-mode 'latex-mode)
+    (let ((re (concat "\\_<\\("
+                      (mapconcat #'regexp-quote
+                                 ef-ext-abbreviations-to-escape
+                                 "\\|")
+                      "\\)\\(\s\\)")))
+      (ef-ext-do-on-all-files
+       (reftex-all-document-files)
+       (goto-char (point-min))
+       (while (re-search-forward "\\((\\)~\\(\\\\ref\\|\\\\Ref\\)" nil t)
+         (replace-match "\\1\\2"))
+       (goto-char (point-min))
+       (while (re-search-forward re nil t)
+         (replace-match "\\1\\\\\\2"))))))
+
+(add-hook 'before-save-hook #'ef-ext-latex-housekeeping)
+#+end_src
+
+#+begin_src emacs-lisp :tangle yes
+(provide 'ef-ext)
+;;; ef-ext.el ends here
+
+#+end_src
