@@ -346,9 +346,9 @@ argument (i.e., with the keybinding defined below, with ~C-u C-c )~).
 Otherwise, prompt for new label and relabel all associated items
 in the buffer."
   (interactive)
-  (save-excursion
-    (if (not (ef-ext-point-on-label-ref-p))
-	(reftex-label)
+  (if (not (ef-ext-point-on-label-ref-p))
+      (reftex-label)
+    (save-excursion
       (let* ((old-label (ef-ext-point-on-label-ref-p))
              (new-label (read-string "New label: "
                                      old-label nil nil t)))
@@ -377,13 +377,15 @@ Otherwise, prompt for new label and relabel all associated items
 in the buffer.  If prefix argument ARG is non-nil, do not insert
 parentheses around the reference."
   (interactive "P")
-  (save-excursion
-    (if (not (ef-ext-point-on-label-ref-p))
-	(progn (unless current-prefix-arg
-		 (insert "()")
-		 (backward-char))
-	       (reftex-parse-one)
-	       (reftex-reference))
+  (if (not (ef-ext-point-on-label-ref-p))
+      (progn (unless current-prefix-arg
+	       (insert "()")
+	       (backward-char))
+	     (reftex-parse-one)
+	     (reftex-reference)
+	     (unless current-prefix-arg
+	       (forward-char)))
+    (save-excursion
       (let* ((old-label (ef-ext-point-on-label-ref-p))
              (new-label (read-string "New label: "
                                      old-label nil nil t)))
