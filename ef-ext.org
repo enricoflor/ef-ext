@@ -66,7 +66,7 @@ active), I want to comment or uncomment the line I am currently on.
 (defun ef-ext-comment-line-or-dwim-up (arg)
   "Comment or uncomment line if point is not at end of line.
 If point is at the end of line or region is active, evaluate
-'comment-dwim' with arguments ARG."
+`comment-dwim' with arguments ARG."
   (interactive "*P")
   (if (or (eolp) (use-region-p))
       (comment-dwim arg)
@@ -94,8 +94,8 @@ independently useful anyways.
 (defun ef-ext-unfill-newest-entry-in-kill-ring (origf &rest args)
   "Call ORIGF with ARGS.
 If called with a prefix argument, unfill newest entry in the
-'kill-ring'.  This is meant to be an advice around
-'kill-ring-save' and 'kill-region' (which would then be ORIGF)."
+`kill-ring'.  This is meant to be an advice around
+`kill-ring-save' and `kill-region' (which would then be ORIGF)."
   (interactive (list (mark) (point) 'region) p)
   (apply origf args)
   (when current-prefix-arg
@@ -210,11 +210,11 @@ the two functions in order to achieve this.
 (require 'pdf-view)
 
 (defun ef-ext-scroll-down-other-window-pdf (origf &rest args)
-  "Call ORIGF with ARGS if other window is not in 'pdf-vew-mode'.
+  "Call ORIGF with ARGS if other window is not in `pdf-view-mode'.
 If it is, scroll down the pdf in other window.
 
 This is meant to be an advice around
-'scroll-other-window-down' (fed as ORIGF)."
+`scroll-other-window-down' (fed as ORIGF)."
   (interactive)
   (when (one-window-p) (user-error "There is no other window"))
   (let ((other-window-pdf (prog2
@@ -228,10 +228,10 @@ This is meant to be an advice around
       (other-window -1))))
 
 (defun ef-ext-scroll-up-other-window-pdf (origf &rest args)
-  "Call ORIGF with ARGS if other window is not in 'pdf-vew-mode'.
+  "Call ORIGF with ARGS if other window is not in `pdf-view-mode'.
 If it is, scroll up the pdf in other window.
 
-This is meant to be an advice around 'scroll-other-window' (fed
+This is meant to be an advice around `scroll-other-window' (fed
 as ORIGF)."
   (interactive)
   (when (one-window-p) (user-error "There is no other window"))
@@ -267,7 +267,7 @@ there really isn't any disadvantage here.
 (require 'pdf-isearch)
 
 (defun ef-ext-jump-to-source ()
-  "Try to call 'pdf-isearch-sync-backward'.
+  "Try to call `pdf-isearch-sync-backward'.
 If that is successful and point is invisible, unfold the current
 environment to show it."
   (interactive)
@@ -342,7 +342,7 @@ argument (i.e., with the keybinding defined below, with ~C-u C-c )~).
 
 #+begin_src emacs-lisp :tangle yes
 (defun ef-ext-reftex-label ()
-  "Evaluate 'reftex-label' if not on a LaTeX \\ref or \\label.
+  "Evaluate `reftex-label' if not on a LaTeX \\ref or \\label.
 Otherwise, prompt for new label and relabel all associated items
 in the buffer."
   (interactive)
@@ -372,7 +372,7 @@ in the buffer."
 	(reftex-parse-all)))))
 
 (defun ef-ext-reftex-reference (&optional arg)
-  "Evaluate 'reftex-reference' if not on a LaTeX \\ref or \\label.
+  "Evaluate `reftex-reference' if not on a LaTeX \\ref or \\label.
 Otherwise, prompt for new label and relabel all associated items
 in the buffer.  If prefix argument ARG is non-nil, do not insert
 parentheses around the reference."
