@@ -197,6 +197,111 @@ Change selected window, so that current buffer stays the same."
 (global-set-key (kbd "M-P") #'ef-ext-cycle-windows)
 #+end_src
 
+** Deleting white space intelligently
+
+Emacs already has commands that deal with deleting space and blank
+lines rather intelligently.  These are ~delete-blank-lines~ (~C-x C-o~)
+and ~cycle-spacing~ (no keybinding by default).  These take care,
+respectively, of collapsing several blank lines into one and of
+cycling through states where the white space around point is collapsed
+into one, deleted altogether and restored as it was.
+
+I want a command that does all this in a /Do What I Mean/ fashion, and
+more.  The command ~ef-ext-delete-space-dwim~ takes care of this, but
+also joins lines that are separated by blank lines.  All I need to do
+is to repeat the command: when there is no white space left to get rid
+of, repeating ~ef-ext-delete-space-dwim~ once more just restores things
+as they were before I started calling the command.
+
+I rebind ~M-SPC~, a very accessible key that is bound to ~just-one-space~
+by default, to this new command.
+
+#+CAPTION: ef-ext-delete-space-dwim in action
+#+NAME:   fig:ef-ext-delete-space-dwim
+[[./images/delete-white-space.gif]]
+
+#+begin_src emacs-lisp :tangle yes
+(defvar ef-ext--delete-space-context nil)
+
+(defun ef-ext-delete-space-dwim ()
+  "Do What I Mean with whitespace.
+
+This command will intelligently delete whitespace vertically and
+horizontally.  The behavior is cyclic: it will do the next
+intelligent deletion upon immediate repetition of the command.
+
+The last step of the cycle, when there is nothing left to delete,
+is to restore things as they where right before the cycle was
+started."
+  (interactive)
+  (unless (and ef-ext--delete-space-context
+	       (equal last-command this-command))
+    ;; assign a new value to 'ef-ext--delete-space-context'. The value
+    ;; is a cons cell (ST . P), where P is the point and ST is the
+    ;; buffer substring consisting of whitespace (and newline
+    ;; characters) around point.
+    (save-excursion
+      (let ((beg (save-excursion
+		   (re-search-backward "[^\s\t\r\n]" nil t)
+		   (1+ (point))))
+	    (end (save-excursion
+		   (re-search-forward "[^\s\t\r\n]" nil t)
+		   (1- (point)))))
+	(setq ef-ext--delete-space-context
+	      (cons (buffer-substring beg end) (point))))))
+  (let ((p-line (string-blank-p (save-excursion
+				  (forward-line -1)
+				  (thing-at-point 'line t))))
+	(n-line (string-blank-p (save-excursion
+				  (forward-line 1)
+				  (thing-at-point 'line t))))
+	;; p-line non nil means the line above point is blank, n-line
+	;; non-nil means line below point is blank
+	(point-on-whitespace
+	 ;; value is 0 if point is not adjacent to whitespace.  Value
+	 ;; is 1 if it is adjacent to only one whitespace, 2 if it is
+	 ;; adjacent to a string of whitespace longer than 1.
+	 (let ((position (point))
+	       (one-space)
+	       (more-spaces))
+	   (save-excursion
+	     (beginning-of-line)
+	     (catch 'found
+	       (while (re-search-forward "[[:space:]]" (line-end-position) t)
+		 (when (<= (match-beginning 0) position (match-end 0))
+		   (throw 'found (setq one-space t)))
+		 nil))
+	     (if (not one-space)
+		 0
+	       (beginning-of-line)
+	       (catch 'found
+		 (while (re-search-forward "[[:space:]]\\{2,\\}"
+					   (line-end-position) t)
+		   (when (<= (match-beginning 0) position (match-end 0))
+		     (throw 'found (setq more-spaces t)))))
+	       (if more-spaces 2 1))))))
+    (cond ((string-blank-p (thing-at-point 'line t)) (delete-blank-lines))
+	  ((eq point-on-whitespace 2) (just-one-space))
+	  ((eq point-on-whitespace 1) (delete-horizontal-space))
+	  ((and (eolp) n-line) (save-excursion
+				 (forward-line 1)
+				 (delete-blank-lines)))
+	  ((eolp) (join-line t))
+	  ((and (bolp) p-line) (save-excursion
+				 (forward-line -1)
+				 (delete-blank-lines)))
+	  ((bolp) (join-line))
+	  ((and (equal last-command this-command)
+		(eq point-on-whitespace 0)
+		ef-ext--delete-space-context)
+	   (insert (car ef-ext--delete-space-context))
+	   (goto-char (cdr ef-ext--delete-space-context))
+	   (setq ef-ext--delete-space-context nil)))))
+
+
+(global-set-key (kbd "M-SPC") #'ef-ext-delete-space-dwim)
+#+end_src
+
 ** PDF navigation
 
 *** Window scrolling
