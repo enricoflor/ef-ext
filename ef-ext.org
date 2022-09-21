@@ -63,7 +63,7 @@ the end of the line.  If point is anywhere else (and the region is not
 active), I want to comment or uncomment the line I am currently on.
 
 #+begin_src emacs-lisp :tangle yes
-(defun ef-ext-comment-line-or-dwim-up (arg)
+(defun ef-ext-comment-line-or-dwim (arg)
   "Comment or uncomment line if point is not at end of line.
 If point is at the end of line or region is active, evaluate
 `comment-dwim' with arguments ARG."
