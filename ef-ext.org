@@ -313,7 +313,7 @@ This is particularly useful to me when writing plain text and I need
 to enforce some vertical alignment.
 
 #+begin_src emacs-lisp :tangle yes
-(defun ef-newline-same-column (direction &optional arg)
+(defun ef-ext--newline-same-column (direction &optional arg)
   "Move cursor to a different line on the same column.
 
 This command creates a new blank line if the target is not a
@@ -323,7 +323,7 @@ Optional numeric argument ARG specifies how many lines to skip,
 if nil it defaults to 1 (just like the first argument of
 `next-line').
 
-If DIR is 'up move cursor up, if 'down move it down."
+If DIRECTION is 'up move cursor up, if 'down move it down."
   (let* ((col (current-column))
 	 (how-much (or arg 1))
 	 (count 1)
@@ -361,12 +361,12 @@ optional numeric prefix argument to specify how many lines to create
 very similar to the standard keybindings for ~next-line~ and
 ~previous-line.~
 
-#+CAPTION: ef-newline-same-column
-#+NAME:   fig:ef-newline-same-column
+#+CAPTION: ef-ext--newline-same-column
+#+NAME:   fig:ef-ext--newline-same-column
 [[./images/same-col.gif]]
 
 #+begin_src emacs-lisp :tangle yes
-(defun ef-newline-up-same-column (&optional arg)
+(defun ef-ext-newline-up-same-column (&optional arg)
   "Open a new line above cursor and move point there on same column.
 
 If the target line is already blank, just put the cursor there at
@@ -375,9 +375,9 @@ the right column.
 Optional numeric prefix argument ARG specifies how many lines to
 move (like the first argument of `next-line')."
   (interactive "p")
-  (ef-newline-same-column 'up arg))
+  (ef-ext--newline-same-column 'up arg))
 
-(defun ef-newline-down-same-column (&optional arg)
+(defun ef-ext-newline-down-same-column (&optional arg)
   "Open a new line below cursor and move point there on same column.
 
 If the target line is already blank, just put the cursor there at
@@ -386,10 +386,10 @@ the right column.
 Optional numeric prefix argument ARG specifies how many lines to
 move (like the first argument of `next-line')."
   (interactive "p")
-  (ef-newline-same-column 'down arg))
+  (ef-ext--newline-same-column 'down arg))
 
-(global-set-key (kbd "M-C-p") #'ef-newline-up-same-column)
-(global-set-key (kbd "M-C-n") #'ef-newline-down-same-column)
+(global-set-key (kbd "M-C-p") #'ef-ext-newline-up-same-column)
+(global-set-key (kbd "M-C-n") #'ef-ext-newline-down-same-column)
 #+end_src
 
 ** PDF navigation
