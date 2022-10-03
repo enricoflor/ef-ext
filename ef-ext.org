@@ -46,10 +46,11 @@
 #+end_src
 
 ** Content                                                              :toc:
-
   - [[#commenting][Commenting]]
   - [[#unfilling][Unfilling]]
   - [[#window-navigation][Window navigation]]
+  - [[#deleting-white-space-intelligently][Deleting white space intelligently]]
+  - [[#new-lines-on-same-column][New lines on same column]]
   - [[#pdf-navigation][PDF navigation]]
   - [[#latex-related-stuff][LaTeX related stuff]]
 
@@ -300,6 +301,91 @@ started."
 
 
 (global-set-key (kbd "M-SPC") #'ef-ext-delete-space-dwim)
+#+end_src
+
+** New lines on same column
+
+This function will create a new line above or after the current one and
+move the cursor there at the same column position.  The line is only
+created if there is no suitable empty line already.
+
+This is particularly useful to me when writing plain text and I need
+to enforce some vertical alignment.
+
+#+begin_src emacs-lisp :tangle yes
+(defun ef-newline-same-column (direction &optional arg)
+  "Move cursor to a different line on the same column.
+
+This command creates a new blank line if the target is not a
+blank line.
+
+Optional numeric argument ARG specifies how many lines to skip,
+if nil it defaults to 1 (just like the first argument of
+`next-line').
+
+If DIR is 'up move cursor up, if 'down move it down."
+  (let* ((col (current-column))
+	 (how-much (or arg 1))
+	 (count 1)
+	 (down (or (and (eq direction 'down)
+			(> arg 0))
+		   (and (eq direction 'up)
+			(< arg 0))))
+	 (step (if down 1 -1)))
+    (when (eq arg 0)
+      (user-error "0 is an Invalid value for ARG"))
+    ;; If ARG has a negative value, make how-much be its absolute
+    (when (< how-much 0) (setq how-much (- how-much (* 2 how-much))))
+    (while (<= count how-much)
+      (cond ((save-excursion (and (ignore-errors (line-move step))
+				  (string-blank-p (thing-at-point 'line t))))
+	     (line-move step)
+	     (move-to-column col t))
+	    ;; If we are at one end of the available portion of the buffer
+	    ;; we have to "create" new lines
+	    (down
+	     (end-of-line)
+	     (split-line t)
+	     (next-line)
+	     (delete-region (line-beginning-position) (line-end-position))
+	     (move-to-column col t))
+	    (t (beginning-of-line) (split-line t) (move-to-column col t)))
+      (setq count (1+ count)))))
+#+end_src
+
+Two interactive commands are defined: one that creates a line above
+and one that create a line below the current one.  You can pass an
+optional numeric prefix argument to specify how many lines to create
+(in a manner similar to how you can pass numeric arguments to, say,
+~next-line~).  I bind ~M-C-p~ and ~M-C-n~ to these commands because they are
+very similar to the standard keybindings for ~next-line~ and
+~previous-line.~
+
+#+begin_src emacs-lisp :tangle yes
+(defun ef-newline-up-same-column (&optional arg)
+  "Open a new line above cursor and move point there on same column.
+
+If the target line is already blank, just put the cursor there at
+the right column.
+
+Optional numeric prefix argument ARG specifies how many lines to
+move (like the first argument of `next-line')."
+  (interactive "p")
+  (ef-newline-same-column 'up arg))
+
+(defun ef-newline-down-same-column (&optional arg)
+  "Open a new line below cursor and move point there on same column.
+
+If the target line is already blank, just put the cursor there at
+the right column.
+
+Optional numeric prefix argument ARG specifies how many lines to
+move (like the first argument of `next-line')."
+  (interactive "p")
+  (ef-newline-same-column 'down arg))
+
+(global-set-key (kbd "M-C-p") #'ef-newline-up-same-column)
+(global-set-key (kbd "M-C-n") #'ef-newline-down-same-column)
 #+end_src
 
 ** PDF navigation
