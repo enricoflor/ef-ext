@@ -361,6 +361,10 @@ optional numeric prefix argument to specify how many lines to create
 very similar to the standard keybindings for ~next-line~ and
 ~previous-line.~
 
+#+CAPTION: ef-newline-same-column
+#+NAME:   fig:ef-newline-same-column
+[[./images/same-col.gif]]
+
 #+begin_src emacs-lisp :tangle yes
 (defun ef-newline-up-same-column (&optional arg)
   "Open a new line above cursor and move point there on same column.
