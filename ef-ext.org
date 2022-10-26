@@ -52,6 +52,7 @@
   - [[#deleting-white-space-intelligently][Deleting white space intelligently]]
   - [[#new-lines-on-same-column][New lines on same column]]
   - [[#pdf-navigation][PDF navigation]]
+  - [[#magit-remind][Magit-remind]]
   - [[#latex-related-stuff][LaTeX related stuff]]
 
 ** Commenting
@@ -470,6 +471,83 @@ environment to show it."
   (when (invisible-p (point)) (outline-show-entry)))
 
 (define-key isearch-mode-map (kbd "C-<return>") #'ef-ext-jump-to-source)
+#+end_src
+
+** Magit-remind
+
+Sometimes when working on things you forget that certain files in the
+repository were modified.  It's good to at least be reminded of that
+before moving on.  Adding ~ef-ext-magit-remind-on-kill-buffer-hook~ on
+~kill-buffer-hook~ does this in a rather unobtrusive way, relying on
+[[https://elpa.nongnu.org/nongnu/magit.html][magit]].
+
+At any time, you might have several buffers open that visit files in a
+given repository /R/.  Now suppose you start killing these buffers (one
+by one, or in batch): at the moment where no buffer is left that
+visits a non-ignored file in /R/, the magit status buffer will be
+displayed if anything is modified (staged or unstaged) in /R/, so that
+you can do what you need to do, or ignore everything.
+
+#+begin_src emacs-lisp :tangle yes
+(require 'magit)
+
+(defun ef-ext--buffer-in-repo-p (repo buffer)
+  "Return t if BUFFER visits a file in REPO.
+
+REPO, a string, is a the absolute path of the git repository.
+Return nil if BUFFER visits a file that is ignored by git (that
+is, in the output of `magit-ignored-files')."
+  (when-let ((file (buffer-file-name buffer))
+             (root (ignore-errors
+                     (expand-file-name (vc-find-root file ".git")))))
+    (and (string-equal repo root)
+         (not (member file
+                      (mapcar (lambda (x) (concat repo x))
+                              (magit-ignored-files)))))))
+
+(defun ef-ext--magit-reminder-needed-p (&optional buffer)
+  "Return nil if no reminder is needed.
+
+If BUFFER (a buffer) is nil, use value of `current-buffer'.
+
+If BUFFER is visiting a file in a certain git repository such
+that:
+
+  - the file it is visiting is not ignored by git
+
+  and
+
+  - no other buffer is currently visiting a non ignored file in
+    that repository
+
+return the absolute path of the repository as a string."
+  (when-let* ((dir default-directory)
+              (buff (or buffer (current-buffer)))
+              (file (buffer-file-name buff))
+              (repo (expand-file-name (vc-find-root file ".git")))
+              (modifiedp (prog2
+                             (cd repo)
+                             (magit-anything-modified-p)
+                           (cd dir)))
+              (bufflist
+               (cl-remove-if-not
+                (lambda (x) (ef-ext--buffer-in-repo-p repo x))
+                (buffer-list))))
+    (if (remove buff bufflist) nil repo)))
+
+(defun ef-ext-magit-remind-on-kill-buffer-hook ()
+  "Display magit status buffer if the reminder is needed.
+
+The reminder is needed if `ef-ext--magit-reminder-needed-p'
+returns non-nil.
+
+This function is meant to be added on `kill-buffer-hook'."
+  (when-let ((repo (ef-ext--magit-reminder-needed-p)))
+    (magit-status-setup-buffer repo)
+    (message (format "Modified files in repo %s"
+                     (abbreviate-file-name repo)))))
+
+(add-hook 'kill-buffer-hook 'ef-ext-magit-remind-on-kill-buffer-hook)
 #+end_src
 
 ** LaTeX related stuff
