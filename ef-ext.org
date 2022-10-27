@@ -524,7 +524,8 @@ return the absolute path of the repository as a string."
   (when-let* ((dir default-directory)
               (buff (or buffer (current-buffer)))
               (file (buffer-file-name buff))
-              (repo (expand-file-name (vc-find-root file ".git")))
+              (repo (ignore-errors
+                      (expand-file-name (vc-find-root file ".git"))))
               (modifiedp (prog2
                              (cd repo)
                              (magit-anything-modified-p)
