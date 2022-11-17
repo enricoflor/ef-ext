@@ -718,8 +718,8 @@ in the buffer."
 			  old-label)
                (replace-match new-label t t nil 2))))
 	  (reftex-parse-all)))
-    (progn (reftex-parse-one)
-	   (reftex-reference))))
+    (reftex-parse-one)
+    (reftex-reference)))
 #+end_src
 
 I overwrite the default bindings, since these two functions are drop
