@@ -76,7 +76,7 @@ If point is at the end of line or region is active, evaluate
 				 (line-end-position))))
 
 ;; This will overwrite the default keybinding of comment-dwim
-(global-set-key (kbd "M-;") #'ef-ext-comment-line-or-dwim)
+(define-key global-map (kbd "M-;") #'ef-ext-comment-line-or-dwim)
 #+end_src
 
 ** Unfilling
@@ -165,7 +165,7 @@ window with the another window, and so on."
     (window-swap-states (selected-window) (get-buffer-window target))
     (setq ef-ext-last-shifted-buffer target)))
 
-(global-set-key (kbd "M-p") #'ef-ext-shift-window)
+(define-key global-map (kbd "M-p") #'ef-ext-shift-window)
 #+end_src
 
 *** Cycle all the windows
@@ -196,7 +196,7 @@ Change selected window, so that current buffer stays the same."
       (window--display-buffer (cdr ass) (car ass) 'reuse))
     (select-window (get-buffer-window buff nil) t)))
 
-(global-set-key (kbd "M-P") #'ef-ext-cycle-windows)
+(define-key global-map (kbd "M-P") #'ef-ext-cycle-windows)
 #+end_src
 
 ** Deleting white space intelligently
@@ -301,7 +301,7 @@ started."
 	   (setq ef-ext--delete-space-context nil)))))
 
 
-(global-set-key (kbd "M-SPC") #'ef-ext-delete-space-dwim)
+(define-key global-map (kbd "M-SPC") #'ef-ext-delete-space-dwim)
 #+end_src
 
 ** New lines on same column
@@ -389,8 +389,8 @@ move (like the first argument of `next-line')."
   (interactive "p")
   (ef-ext--newline-same-column 'down arg))
 
-(global-set-key (kbd "M-C-p") #'ef-ext-newline-up-same-column)
-(global-set-key (kbd "M-C-n") #'ef-ext-newline-down-same-column)
+(define-key global-map (kbd "M-C-p") #'ef-ext-newline-up-same-column)
+(define-key global-map (kbd "M-C-n") #'ef-ext-newline-down-same-column)
 #+end_src
 
 ** PDF navigation
