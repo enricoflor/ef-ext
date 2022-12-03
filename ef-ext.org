@@ -689,37 +689,51 @@ referenced in the project."
         (t
          (reftex-label))))
 
-(defun ef-ext-reftex-reference ()
+(defun ef-ext-reftex-reference (&optional arg)
   "Evaluate `reftex-reference' if not on a LaTeX \\ref or \\label.
 
 Otherwise, prompt for new label and relabel all associated items
 in the buffer."
-  (interactive)
-  (if (ef-ext-point-on-label-ref-p)
-      (save-excursion
-        (let* ((old-label (ef-ext-point-on-label-ref-p))
-               (new-label (read-string "New label: "
-                                       old-label nil nil t)))
-	  (when (string-blank-p new-label)
-	    (user-error "Labels can't be empty"))
-	  (when (assoc new-label
-                       (symbol-value reftex-docstruct-symbol))
-	    (unless (yes-or-no-p
-		     (format "Label \"%s\" already used.  Continue? "
-			     new-label))
-	      (ef-ext-reftex-label)))
-	  (reftex-parse-all)
-	  (ef-ext-do-on-all-files
-	   (reftex-all-document-files)
-	   (widen)
-	   (goto-char (point-min))
-	   (while (re-search-forward ef-ext-label-ref-rg nil t)
-             (when (equal (match-string-no-properties 2)
-			  old-label)
-               (replace-match new-label t t nil 2))))
-	  (reftex-parse-all)))
-    (reftex-parse-one)
-    (reftex-reference)))
+  (interactive "P")
+  (cond ((ef-ext-point-on-label-ref-p)
+         (save-excursion
+           (let* ((old-label (ef-ext-point-on-label-ref-p))
+                  (new-label (read-string "New label: "
+                                          old-label nil nil t)))
+	     (when (string-blank-p new-label)
+	       (user-error "Labels can't be empty"))
+	     (when (assoc new-label
+                          (symbol-value reftex-docstruct-symbol))
+	       (unless (yes-or-no-p
+		        (format "Label \"%s\" already used.  Continue? "
+			        new-label))
+	         (ef-ext-reftex-label)))
+	     (reftex-parse-all)
+	     (ef-ext-do-on-all-files
+	      (reftex-all-document-files)
+	      (widen)
+	      (goto-char (point-min))
+	      (while (re-search-forward ef-ext-label-ref-rg nil t)
+                (when (equal (match-string-no-properties 2)
+			     old-label)
+                  (replace-match new-label t t nil 2))))
+	     (reftex-parse-all))))
+        (current-prefix-arg
+         (let ((new-label (read-string "Label: "
+                                       "" nil nil t)))
+           (when (string-blank-p new-label)
+	     (user-error "Labels can't be empty"))
+           (when (assoc new-label
+                        (symbol-value reftex-docstruct-symbol))
+	     (unless (yes-or-no-p
+		      (format "Label \"%s\" already used.  Continue? "
+			      new-label))
+	       (user-error "")))
+           (insert "\\ref{" new-label "}")))
+        (t
+         (reftex-parse-one)
+         (reftex-reference))))
+
 #+end_src
 
 I overwrite the default bindings, since these two functions are drop
