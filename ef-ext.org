@@ -1,7 +1,6 @@
 #+title: ef-ext.el
 #+author: Enrico Flor
 #+description: Some useful small extensions to Emacs
-#+startup: noindent
 
 #+begin_src emacs-lisp :tangle yes
 ;;; ef-ext.el --- Miscellanea of simple extensions -*- lexical-binding: t; -*-
@@ -238,50 +237,34 @@ started."
   (interactive)
   (unless (and ef-ext--delete-space-context
 	       (equal last-command this-command))
-    ;; assign a new value to 'ef-ext--delete-space-context'. The value
-    ;; is a cons cell (ST . P), where P is the point and ST is the
-    ;; buffer substring consisting of whitespace (and newline
-    ;; characters) around point.
-    (save-excursion
-      (let ((beg (save-excursion
-		   (re-search-backward "[^\s\t\r\n]" nil t)
-		   (1+ (point))))
-	    (end (save-excursion
-		   (re-search-forward "[^\s\t\r\n]" nil t)
-		   (1- (point)))))
-	(setq ef-ext--delete-space-context
-	      (cons (buffer-substring beg end) (point))))))
-  (let ((p-line (string-blank-p (save-excursion
-				  (forward-line -1)
-				  (thing-at-point 'line t))))
-	(n-line (string-blank-p (save-excursion
-				  (forward-line 1)
-				  (thing-at-point 'line t))))
+    ;; assign a new value to 'ef-ext--delete-space-context'. The value is a
+    ;; cons cell (ST . P), where P is the point and ST is the buffer
+    ;; substring consisting of whitespace (and newline characters)
+    ;; around point.
+    (let ((beg (save-excursion (re-search-backward "[^\s\t\r\n]" nil t)
+		               (1+ (point))))
+	  (end (save-excursion (re-search-forward "[^\s\t\r\n]" nil t)
+		               (1- (point)))))
+      (setq ef-ext--delete-space-context
+	    (cons (buffer-substring beg end) (point)))))
+  (let ((p-line (string-blank-p (save-excursion (forward-line -1)
+				                (thing-at-point 'line t))))
+	(n-line (string-blank-p (save-excursion (forward-line 1)
+				                (thing-at-point 'line t))))
+	;; p-line non nil means the line above point is blank, n-line
+	;; non-nil means line below point is blank
+	(look (lambda (re) (or (looking-at-p re)
+                               (looking-back re (line-beginning-position)))))
+
 	;; p-line non nil means the line above point is blank, n-line
 	;; non-nil means line below point is blank
 	(point-on-whitespace
 	 ;; value is 0 if point is not adjacent to whitespace.  Value
 	 ;; is 1 if it is adjacent to only one whitespace, 2 if it is
 	 ;; adjacent to a string of whitespace longer than 1.
-	 (let ((position (point))
-	       (one-space)
-	       (more-spaces))
-	   (save-excursion
-	     (beginning-of-line)
-	     (catch 'found
-	       (while (re-search-forward "[[:space:]]" (line-end-position) t)
-		 (when (<= (match-beginning 0) position (match-end 0))
-		   (throw 'found (setq one-space t)))
-		 nil))
-	     (if (not one-space)
-		 0
-	       (beginning-of-line)
-	       (catch 'found
-		 (while (re-search-forward "[[:space:]]\\{2,\\}"
-					   (line-end-position) t)
-		   (when (<= (match-beginning 0) position (match-end 0))
-		     (throw 'found (setq more-spaces t)))))
-	       (if more-spaces 2 1))))))
+         (cond ((funcall look "[[:space:]]\\{2,\\}") 2)
+               ((funcall look "[[:space:]]") 1)
+               (t 0))))
     (cond ((string-blank-p (thing-at-point 'line t)) (delete-blank-lines))
 	  ((eq point-on-whitespace 2) (just-one-space))
 	  ((eq point-on-whitespace 1) (delete-horizontal-space))
@@ -299,7 +282,6 @@ started."
 	   (insert (car ef-ext--delete-space-context))
 	   (goto-char (cdr ef-ext--delete-space-context))
 	   (setq ef-ext--delete-space-context nil)))))
-
 
 (define-key global-map (kbd "M-SPC") #'ef-ext-delete-space-dwim)
 #+end_src
