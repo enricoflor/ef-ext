@@ -10,8 +10,8 @@
 ;; Author: Enrico Flor <enrico@eflor.net>
 ;; Maintainer: Enrico Flor <enrico@eflor.net>
 ;; URL: https://github.com/enricoflor/ef-ext
-;; Version: 0.1.0
-;; Package-Requires: ((emacs "26.1"))
+;; Version: 0.2.0
+;; Package-Requires: ((emacs "27.1"))
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
