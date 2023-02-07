@@ -198,6 +198,36 @@ Change selected window, so that current buffer stays the same."
 (define-key global-map (kbd "M-P") #'ef-ext-cycle-windows)
 #+end_src
 
+** Switch to buffer in other tab
+This command lets you choose the name of an existing buffer, with
+completion, and brings you to the tab (in the sense of ~tab-bar-mode~,
+built in since Emacs 27.1) in which that buffer is live.  If this
+buffer is not live in any tab, just switch to that buffer in the same
+way as ~switch-to-buffer~ would.
+
+#+begin_src emacs-lisp :tangle yes
+(defun ef-ext-switch-to-tab-displaying-buffer ()
+  "Switch to buffer and possibly switch tab too.
+
+Select a live buffer just like with `switch-to-buffer'.  If this
+buffer is displayed in a window in the current tab, select that
+window.  If it is displayed in another tab, switch to that tab
+and select the window that displays it.  Otherwise just display
+that buffer as `switch-to-buffer' would."
+  (interactive)
+  (let* ((target-buffer (read-buffer-to-switch
+                         "Switch to windows displaying: "))
+         (target-tab (tab-bar-get-buffer-tab target-buffer)))
+    (cond ((not target-tab)
+           (switch-to-buffer target-buffer))
+          ((equal (car target-tab) 'current-tab)
+           (select-window (get-buffer-window target-buffer)))
+          (t
+           (tab-bar-switch-to-tab
+            (alist-get 'name (tab-bar-get-buffer-tab target-buffer)))
+           (select-window (get-buffer-window target-buffer))))))
+#+end_src
+
 ** Deleting white space intelligently
 
 Emacs already has commands that deal with deleting space and blank
