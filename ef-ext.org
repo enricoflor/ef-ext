@@ -265,53 +265,44 @@ The last step of the cycle, when there is nothing left to delete,
 is to restore things as they where right before the cycle was
 started."
   (interactive)
+  (when (= (point-min) (point-max))
+    (user-error "Available portion of buffer is empty"))
   (unless (and ef-ext--delete-space-context
 	       (equal last-command this-command))
-    ;; assign a new value to 'ef-ext--delete-space-context'. The value is a
-    ;; cons cell (ST . P), where P is the point and ST is the buffer
-    ;; substring consisting of whitespace (and newline characters)
-    ;; around point.
-    (let ((beg (save-excursion (re-search-backward "[^\s\t\r\n]" nil t)
-		               (1+ (point))))
-	  (end (save-excursion (re-search-forward "[^\s\t\r\n]" nil t)
-		               (1- (point)))))
+    ;; assign a new value to 'ef-ext--delete-space-context'. The value
+    ;; is a cons cell (ST . P), where P is the point and ST is the
+    ;; buffer substring consisting of whitespace (and newline
+    ;; characters) around point.
+    (let ((beg (save-excursion (skip-chars-backward " \t\n")
+		               (point)))
+	  (end (save-excursion (skip-chars-forward " \t\n")
+		               (point))))
       (setq ef-ext--delete-space-context
 	    (cons (buffer-substring beg end) (point)))))
-  (let ((p-line (string-blank-p (save-excursion (forward-line -1)
-				                (thing-at-point 'line t))))
-	(n-line (string-blank-p (save-excursion (forward-line 1)
-				                (thing-at-point 'line t))))
-	;; p-line non nil means the line above point is blank, n-line
-	;; non-nil means line below point is blank
-	(look (lambda (re) (or (looking-at-p re)
-                               (looking-back re (line-beginning-position)))))
-
-	;; p-line non nil means the line above point is blank, n-line
-	;; non-nil means line below point is blank
-	(point-on-whitespace
-	 ;; value is 0 if point is not adjacent to whitespace.  Value
-	 ;; is 1 if it is adjacent to only one whitespace, 2 if it is
-	 ;; adjacent to a string of whitespace longer than 1.
-         (cond ((funcall look "[[:space:]]\\{2,\\}") 2)
-               ((funcall look "[[:space:]]") 1)
-               (t 0))))
+  (let* ((aggr (bound-and-true-p aggressive-indent-mode))
+         (p-line (string-blank-p (save-excursion (forward-line -1)
+				                 (thing-at-point 'line t))))
+	 (n-line (string-blank-p (save-excursion (forward-line 1)
+				                 (thing-at-point 'line t))))
+         (ws-len (length (thing-at-point 'whitespace t))))
+    (when aggr (aggressive-indent-mode -1))
     (cond ((string-blank-p (thing-at-point 'line t)) (delete-blank-lines))
-	  ((eq point-on-whitespace 2) (just-one-space))
-	  ((eq point-on-whitespace 1) (delete-horizontal-space))
+	  ((> ws-len 1) (just-one-space))
 	  ((and (eolp) n-line) (save-excursion
-				 (forward-line 1)
-				 (delete-blank-lines)))
+			         (forward-line 1)
+                                 (delete-blank-lines)))
 	  ((eolp) (join-line t))
 	  ((and (bolp) p-line) (save-excursion
-				 (forward-line -1)
-				 (delete-blank-lines)))
+			         (forward-line -1)
+			         (delete-blank-lines)))
 	  ((bolp) (join-line))
+          ((= ws-len 1) (delete-horizontal-space))
 	  ((and (equal last-command this-command)
-		(eq point-on-whitespace 0)
-		ef-ext--delete-space-context)
+	        ef-ext--delete-space-context)
 	   (insert (car ef-ext--delete-space-context))
 	   (goto-char (cdr ef-ext--delete-space-context))
-	   (setq ef-ext--delete-space-context nil)))))
+	   (setq ef-ext--delete-space-context nil)))
+    (when aggr (aggressive-indent-mode 1))))
 
 (define-key global-map (kbd "M-SPC") #'ef-ext-delete-space-dwim)
 #+end_src
